@@ -63,6 +63,17 @@ public class Variant implements VCF {
 	}
 	
 	@Override
+	// for viewing as a string rn
+	public String toString() {
+		StringBuffer returnStr = new StringBuffer("(");
+		for (Object x : getValues() ) {
+			returnStr.append(x.toString()+" ");
+		}
+		returnStr.append(")");
+		return returnStr.toString();
+	}
+	
+	@Override
 	public boolean equals(Object o) {
 		
 		Variant other = (Variant) o;
@@ -84,15 +95,31 @@ public class Variant implements VCF {
 	    return result;
 	}
 	
+	
+	public String getChromosome() {
+		return chromosome;
+	}
+
+	public int getPosition() {
+		return position;
+	}
+	
 	@Override
-	// for viewing as a string rn
-	public String toString() {
-		StringBuffer returnStr = new StringBuffer("(");
-		for (Object x : getValues() ) {
-			returnStr.append(x.toString()+" ");
-		}
-		returnStr.append(")");
-		return returnStr.toString();
+	public int getDepth() {
+		return depth;	
+	}
+	
+	@Override
+	public int getQualityScore() {
+		return qualityScore;
+	}
+	
+	public String getRefAllele() {
+		return refAllele;
+	}
+
+	public String getAltAllele() {
+		return altAllele;
 	}
 	
 	public double calcAlleleFreq(String genotype) {
@@ -109,23 +136,20 @@ public class Variant implements VCF {
 	@Override
 	public double getVariantMissingness() {
 		String missingGenotype = "./.";
-		return calcAlleleFreq(missingGenotype);
-		
+		return calcAlleleFreq(missingGenotype);	
 	}
 
 
 	@Override
 	public double getHomozogousRefAlleleFreq() {
 		String homoRefGenotype = "0/0";
-		return calcAlleleFreq(homoRefGenotype);
-		
+		return calcAlleleFreq(homoRefGenotype);	
 	}
 
 	@Override
 	public double getHomozygousAltAlleleFreq() {
 		String homoAltGenotype = "1/1";
-		return calcAlleleFreq(homoAltGenotype);
-		
+		return calcAlleleFreq(homoAltGenotype);	
 	}
 
 	@Override
@@ -137,15 +161,10 @@ public class Variant implements VCF {
 			}
 		}
 		double heteroAlleleFreq = heteroAlleleCount / samples.values().size();
-		return heteroAlleleFreq;
-		
+		return heteroAlleleFreq;	
 	}
 	
-	@Override
-	public int getDepth() {
-		return depth;
-		
-	}
+
 
 
 	
@@ -155,7 +174,6 @@ public class Variant implements VCF {
 		List<String> allVariantsInFile = new ArrayList<>(); // currently this is just an arraylist for easy display but i will likely turn 
 															// this into a class to calculate the average of all the functions called for 
 															// each site to return averageDepth, averageMissingness, etc...
-		
 		List<String> titles = new ArrayList<>();
 		
 		// I plan on later changing this to be multithreaded
