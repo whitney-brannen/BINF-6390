@@ -64,13 +64,24 @@ public class Variant implements VCF {
 	
 	@Override
 	public boolean equals(Object o) {
+		
 		Variant other = (Variant) o;
-		if ( this.chromosome.equals(other.chromosome) && this.position == other.position ) {
-			return true;
-		}
-		else {
-			return false;
-		}
+		
+		if ( this == o ) return true;
+		
+		if (o == null || getClass() != o.getClass()) return false;
+		
+		if ( position != other.position ) return true;
+		
+		return chromosome.equals(other.chromosome) ;
+	}
+	
+	@Override
+	public int hashCode() {
+	    int result = 17;
+	    result = 31 * result + chromosome.hashCode();
+	    result = 31 * result + position;
+	    return result;
 	}
 	
 	@Override
