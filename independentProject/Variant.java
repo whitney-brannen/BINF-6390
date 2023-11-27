@@ -1,13 +1,7 @@
 package independentProject;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -105,12 +99,12 @@ public class Variant implements VCF {
 	}
 	
 	@Override
-	public int getDepth() {
+	public double getDepth() {
 		return depth;	
 	}
 	
 	@Override
-	public int getQualityScore() {
+	public double getQualityScore() {
 		return qualityScore;
 	}
 	
@@ -164,66 +158,7 @@ public class Variant implements VCF {
 		return heteroAlleleFreq;	
 	}
 	
-
-
-
-	
-	// method for parsing file
-	public static void parseVCFFile(BufferedReader reader) throws IOException {
-		
-		List<String> allVariantsInFile = new ArrayList<>(); // currently this is just an arraylist for easy display but i will likely turn 
-															// this into a class to calculate the average of all the functions called for 
-															// each site to return averageDepth, averageMissingness, etc...
-		List<String> titles = new ArrayList<>();
-		
-		// I plan on later changing this to be multithreaded
-		while ( reader.ready() ) {
-						
-			List<Object> values = new ArrayList<>();
-			Map<String,Object> variantLineInfo= new LinkedHashMap<>();
-			
-			String line = reader.readLine();
-			if (line.startsWith("#CHROM")) {
-				String[] titleLine = line.split("\t");
-				titles = Arrays.asList(titleLine);
-			}
-
-			if ( !line.startsWith("##") ) {
-				Object[] variantLine = line.split("\t");
-				values = Arrays.asList(variantLine);
-			}
-			
-			for (int x = 0; x < values.size(); x++ ) {
-				String key = titles.get(x);
-				Object val = values.get(x);
-				variantLineInfo.put(key, val);	
-			}
-			
-			if (variantLineInfo.get("#CHROM") != null && !variantLineInfo.get("#CHROM").equals("#CHROM")) {
-	
-				Variant instance = new Variant(variantLineInfo);
-				String instanceStr = instance.toString();
-				allVariantsInFile.add(instanceStr);
-//				System.out.println(instance.getHeterozygousFreq());
-			}
-			
-		}
-		
-		System.out.println(allVariantsInFile);
-		
-		
-	}
-	
-	
-	public static void main(String[] args) throws IOException {
-		
-		// file input string will be taken from user input later and then checked to see if it exists before sending to parse
-		
-		BufferedReader reader = new BufferedReader(new FileReader("/Users/whitneybrannen/git/BINF-6390/src/independentProject/sampleVCF.vcf"));
-		
-		// parses each line into Variant class 
-		parseVCFFile(reader);
-		
+	public static void main(String[] args) {
 		
 	}
 
