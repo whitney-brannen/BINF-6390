@@ -53,30 +53,48 @@ public class CombinedVariants implements VCF {
 	}
 
 	@Override
-	public double getHomozogousRefAlleleFreq() {
+	public double getHomozogousRefGenotypeFreq() {
+		List<Double> refGenotypeFreq = new ArrayList<>();
+		for ( Variant var : allVariants ) {
+			refGenotypeFreq.add(var.getHomozogousRefGenotypeFreq());
+		}
+		return calculateAverage(refGenotypeFreq);
+	}
+
+	@Override
+	public double getHomozygousAltGenotypeFreq() {
+		List<Double> altGenotypeFreq = new ArrayList<>();
+		for ( Variant var : allVariants ) {
+			altGenotypeFreq.add(var.getHomozygousAltGenotypeFreq());
+		}
+		return calculateAverage(altGenotypeFreq);
+	}
+
+	@Override
+	public double getHeterozygosity() {
+		List<Double> heterozygousFreq = new ArrayList<>();
+		for ( Variant var : allVariants ) {
+			heterozygousFreq.add(var.getHeterozygosity());
+		}
+		return calculateAverage(heterozygousFreq);
+	}
+	
+	@Override
+	public double getRefAlleleFreq() {
 		List<Double> refAlleleFreq = new ArrayList<>();
 		for ( Variant var : allVariants ) {
-			refAlleleFreq.add(var.getHomozogousRefAlleleFreq());
+			refAlleleFreq.add(var.getRefAlleleFreq());
 		}
 		return calculateAverage(refAlleleFreq);
 	}
 
 	@Override
-	public double getHomozygousAltAlleleFreq() {
+	public double getAltAlleleFreq() {
 		List<Double> altAlleleFreq = new ArrayList<>();
 		for ( Variant var : allVariants ) {
-			altAlleleFreq.add(var.getHomozygousAltAlleleFreq());
+			altAlleleFreq.add(var.getAltAlleleFreq());
 		}
 		return calculateAverage(altAlleleFreq);
-	}
-
-	@Override
-	public double getHeterozygousFreq() {
-		List<Double> heterozygousFreq = new ArrayList<>();
-		for ( Variant var : allVariants ) {
-			heterozygousFreq.add(var.getHeterozygousFreq());
-		}
-		return calculateAverage(heterozygousFreq);
 	}
 
 	public static void main(String[] args) {

@@ -1,5 +1,6 @@
 package independentProject;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -116,38 +117,37 @@ public class Variant implements VCF {
 		return altAllele;
 	}
 	
-	public double calcAlleleFreq(String genotype) {
-		double alleleCount = 0;
+	public double calcGenotypeFreq(String genotype) {
+		double genotypeCount = 0;
 		for ( String allele : samples.values() ) {
 			if ( allele.equals(genotype) ) {
-				alleleCount++;
+				genotypeCount++;
 			}
 		}
-		double alleleFreq = alleleCount / samples.values().size();
-		return alleleFreq;
+		double genotypeFreq = genotypeCount / samples.values().size();
+		return genotypeFreq;
 	}
 	
 	@Override
 	public double getVariantMissingness() {
 		String missingGenotype = "./.";
-		return calcAlleleFreq(missingGenotype);	
+		return calcGenotypeFreq(missingGenotype);	
 	}
 
-
 	@Override
-	public double getHomozogousRefAlleleFreq() {
+	public double getHomozogousRefGenotypeFreq() {
 		String homoRefGenotype = "0/0";
-		return calcAlleleFreq(homoRefGenotype);	
+		return calcGenotypeFreq(homoRefGenotype);	
 	}
 
 	@Override
-	public double getHomozygousAltAlleleFreq() {
+	public double getHomozygousAltGenotypeFreq() {
 		String homoAltGenotype = "1/1";
-		return calcAlleleFreq(homoAltGenotype);	
+		return calcGenotypeFreq(homoAltGenotype);	
 	}
 
 	@Override
-	public double getHeterozygousFreq() {
+	public double getHeterozygosity() {
 		double heteroAlleleCount = 0;
 		for ( String allele : samples.values() ) {
 			if ( allele.equals("0/1") || allele.equals("1/0") ) {
@@ -156,6 +156,44 @@ public class Variant implements VCF {
 		}
 		double heteroAlleleFreq = heteroAlleleCount / samples.values().size();
 		return heteroAlleleFreq;	
+	}
+	
+	public double calcAlleleFreq(int targetAllele) {
+		
+		List<Integer> alleleList= new ArrayList<>();
+		
+		for ( String genotype : samples.values() ) {
+			String[] splitGenotype = genotype.split("/");
+			for ( String allele : splitGenotype) {
+				if ( allele.equals(".") ) {
+					alleleList.add(9);
+				}
+				else { 
+					alleleList.add(Integer.valueOf(allele));
+				}
+			}
+		}
+		double alleleCount = 0;
+		
+		for ( int allele : alleleList ) {
+			if ( allele == targetAllele ) {
+				alleleCount++;
+			}
+		}
+		double alleleFreq = alleleCount / alleleList.size();
+		return alleleFreq;
+	}
+	
+	@Override
+	public double getRefAlleleFreq() {
+		int targetAllele = 0;
+		return calcAlleleFreq(targetAllele);
+	}
+
+	@Override
+	public double getAltAlleleFreq() {
+		int targetAllele = 1;
+		return calcAlleleFreq(targetAllele);
 	}
 	
 	public static void main(String[] args) {

@@ -8,8 +8,10 @@ public interface VCF {
 
 	// calculations for variant or average for file
 	public double getVariantMissingness();
-	public double getHomozogousRefAlleleFreq();
-	public double getHomozygousAltAlleleFreq();
-	public double getHeterozygousFreq();
+	public double getHomozogousRefGenotypeFreq();
+	public double getHomozygousAltGenotypeFreq();
+	public double getHeterozygosity();
+	public double getRefAlleleFreq();
+	public double getAltAlleleFreq();
 	
 }

@@ -5,15 +5,15 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Test {
+public class Test { // extends TestCase
 
-	// method for parsing file
+	// single threaded
 	public static void parseVCFFile(BufferedReader reader) throws IOException {
-		
+				
 		List<String> titles = new ArrayList<>();
 		
 		List<Variant> allVariantsInFile = new ArrayList<>(); 
@@ -22,7 +22,7 @@ public class Test {
 		while ( reader.ready() ) {
 						
 			List<Object> values = new ArrayList<>();
-			Map<String,Object> variantLineInfo= new LinkedHashMap<>();
+			Map<String,Object> variantLineInfo= new HashMap<>();
 			
 			String line = reader.readLine();
 			
@@ -48,6 +48,7 @@ public class Test {
 			if (variantLineInfo.get("#CHROM") != null && !variantLineInfo.get("#CHROM").equals("#CHROM")) {
 				Variant instance = new Variant(variantLineInfo);
 				allVariantsInFile.add(instance);
+				System.out.println(instance.getHeterozygosity() + " " + instance.getVariantMissingness());
 			}
 		}
 		
@@ -56,8 +57,10 @@ public class Test {
 		// Add all instances of Variant to the CombinedVariant class for avg calculations
 		// use overall.*methodName*() for avg calcs
 		CombinedVariants overall = new CombinedVariants(allVariantsInFile);
+		System.out.println(overall.getHeterozygosity() + " " + overall.getAltAlleleFreq());
 		
 	}
+	
 	
 	public static void main(String[] args) throws IOException {
 		
@@ -68,5 +71,5 @@ public class Test {
 		parseVCFFile(reader);
 
 	}
-
+	
 }
