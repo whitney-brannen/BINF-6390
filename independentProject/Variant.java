@@ -27,6 +27,14 @@ public class Variant implements VCF {
 	private final double qualityScore;
 	private int depth;
 	
+	private double variantMissingness;
+	private double homozygousRefGenotypeFreq;
+	private double homozygousAltGenotypeFreq;
+	private double heteroGenotypeFreq;
+	private double refAlleleFreq;
+	private double altAlleleFreq;
+	
+	
 	/*
 	 * here need to all private variables for each of the calculations so they can be accessed quicker later
 	 */
@@ -60,8 +68,15 @@ public class Variant implements VCF {
 			String genotype = variantList.get(x).toString().split(":")[0];
 			samples.put(sampleName, genotype);
 		}
+		// perform calculations
+		calcVariantMissingness();
+		calcHomozogousRefGenotypeFreq();
+		calcHomozygousAltGenotypeFreq();
+		calcHeterozygosity();
+		calcRefAlleleFreq();
+		calcAltAlleleFreq();
 	}
-	
+		
 	public List<Object> getValues() {
 		return Arrays.asList(variantLineInfo.values().toArray());
 	}
@@ -126,7 +141,7 @@ public class Variant implements VCF {
 		return altAllele;
 	}
 	
-	public double calcGenotypeFreq(String genotype) {
+	private double calcGenotypeFreq(String genotype) {
 		double genotypeCount = 0;
 		for ( String allele : samples.values() ) {
 			if ( allele.equals(genotype) ) {
@@ -138,36 +153,35 @@ public class Variant implements VCF {
 	}
 	
 	@Override
-	public double getVariantMissingness() {
+	public void calcVariantMissingness() {
 		String missingGenotype = "./.";
-		return calcGenotypeFreq(missingGenotype);	
+		variantMissingness = calcGenotypeFreq(missingGenotype);	
 	}
 
 	@Override
-	public double getHomozogousRefGenotypeFreq() {
+	public void calcHomozogousRefGenotypeFreq() {
 		String homoRefGenotype = "0/0";
-		return calcGenotypeFreq(homoRefGenotype);	
+		homozygousRefGenotypeFreq = calcGenotypeFreq(homoRefGenotype);	
 	}
 
 	@Override
-	public double getHomozygousAltGenotypeFreq() {
+	public void calcHomozygousAltGenotypeFreq() {
 		String homoAltGenotype = "1/1";
-		return calcGenotypeFreq(homoAltGenotype);	
+		homozygousAltGenotypeFreq = calcGenotypeFreq(homoAltGenotype);	
 	}
 
 	@Override
-	public double getHeterozygosity() {
-		double heteroAlleleCount = 0;
+	public void calcHeterozygosity() {
+		double heteroCount = 0;
 		for ( String allele : samples.values() ) {
 			if ( allele.equals("0/1") || allele.equals("1/0") ) {
-				heteroAlleleCount++;
+				heteroCount++;
 			}
 		}
-		double heteroAlleleFreq = heteroAlleleCount / samples.values().size();
-		return heteroAlleleFreq;	
+		heteroGenotypeFreq = heteroCount / samples.values().size();
 	}
 	
-	public double calcAlleleFreq(int targetAllele) {
+	private double calcAlleleFreq(int targetAllele) {
 		
 		List<Integer> alleleList= new ArrayList<>();
 		
@@ -194,17 +208,41 @@ public class Variant implements VCF {
 	}
 	
 	@Override
-	public double getRefAlleleFreq() {
+	public void calcRefAlleleFreq() {
 		int targetAllele = 0;
-		return calcAlleleFreq(targetAllele);
+		refAlleleFreq = calcAlleleFreq(targetAllele);
 	}
 
 	@Override
-	public double getAltAlleleFreq() {
+	public void calcAltAlleleFreq() {
 		int targetAllele = 1;
-		return calcAlleleFreq(targetAllele);
+		altAlleleFreq = calcAlleleFreq(targetAllele);
 	}
 	
+	public double getVariantMissingness() {
+		return variantMissingness;
+	}
+
+	public double getHomozygousRefGenotypeFreq() {
+		return homozygousRefGenotypeFreq;
+	}
+
+	public double getHomozygousAltGenotypeFreq() {
+		return homozygousAltGenotypeFreq;
+	}
+
+	public double getHeterozygosity() {
+		return heteroGenotypeFreq;
+	}
+
+	public double getRefAlleleFreq() {
+		return refAlleleFreq;
+	}
+
+	public double getAltAlleleFreq() {
+		return altAlleleFreq;
+	}
+
 	public static void main(String[] args) {
 		
 	}

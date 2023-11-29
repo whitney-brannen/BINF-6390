@@ -1,6 +1,7 @@
 package independentProject;
 
 import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -11,6 +12,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
@@ -27,7 +29,7 @@ import javax.swing.filechooser.FileSystemView;
 public class GUI extends JFrame{
 	
 	private static final long serialVersionUID = 5979686899134093646L;
-	
+	final String newline = "\n";
 	private JTextArea mainTextArea = new JTextArea();
 	private JButton chooseFileButton = new JButton("Select a file");
 	private final JFileChooser fileChooser = new JFileChooser( FileSystemView.getFileSystemView() );
@@ -143,7 +145,7 @@ public class GUI extends JFrame{
 		while ( reader.ready() ) {
 						
 			List<Object> values = new ArrayList<>();
-			Map<String,Object> variantLineInfo= new HashMap<>();
+			Map<String,Object> variantLineInfo= new LinkedHashMap<>();
 			
 			String line = reader.readLine();
 			
@@ -192,7 +194,45 @@ public class GUI extends JFrame{
 	}
 	
 	public void resultsPage() {
-		mainTextArea.setText("Your stats below\n..........\n");
+		
+		JPanel mainPanel = new JPanel( new BorderLayout() );
+		mainPanel.add(mainTextArea, BorderLayout.NORTH);
+		mainTextArea.setText("Your input file contains " + vcfFileStats.numVariants() + " variants.");
+		
+		JPanel grid = new JPanel( new GridLayout(0,2) );
+		
+		JTextArea leftGrid = new JTextArea();
+		leftGrid.setMargin(new Insets(10, 10, 10, 10));
+		leftGrid.setEditable(false);
+		leftGrid.setLineWrap(true);
+		leftGrid.setWrapStyleWord(true);
+		leftGrid.setText( resultTextLeft() );
+		
+		JTextArea rightGrid = new JTextArea("right side: buttons for viewing individual values");
+		rightGrid.setMargin(new Insets(10, 10, 10, 10));
+		rightGrid.setEditable(false);
+
+		grid.add(leftGrid);
+		grid.add(rightGrid);
+		
+		mainPanel.add(grid,BorderLayout.CENTER);
+		
+		add(mainPanel);
+		setVisible(true);
+	}
+	
+	private String resultTextLeft() {
+		StringBuffer text = new StringBuffer();
+		text.append("Overall:" + newline);
+		text.append("Average read depth: \n" + vcfFileStats.getDepth() + newline);
+		text.append("Average quality score: \n" + vcfFileStats.getQualityScore() + newline);
+		text.append("Average homozygous reference (0/0) genotype frequency: \n" + vcfFileStats.getHomozygousRefGenotypeFreq() + newline);
+		text.append("Average homozygous alternative (1/1) genotype frequency: \n" + vcfFileStats.getHomozygousAltGenotypeFreq() + newline);
+		text.append("Average heterozygosity: \n" + vcfFileStats.getHeterozygosity() + newline);
+		text.append("Average reference allele frequency: \n" + vcfFileStats.getRefAlleleFreq() + newline);
+		text.append("Average alternative allele frequency: \n" + vcfFileStats.getAltAlleleFreq() + newline);
+		
+		return text.toString();
 	}
 	
 	public static void main(String[] args) {

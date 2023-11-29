@@ -57,7 +57,7 @@ public class Test { // extends TestCase
 		// Add all instances of Variant to the CombinedVariant class for avg calculations
 		// use overall.*methodName*() for avg calcs
 		CombinedVariants overall = new CombinedVariants(allVariantsInFile);
-		System.out.println(overall.getHeterozygosity() + " " + overall.getAltAlleleFreq());
+		System.out.println(overall.getHeterozygosity() + " " + overall.getAltAlleleFreq() + " " + overall.getDepth());
 		
 	}
 	

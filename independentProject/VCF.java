@@ -2,16 +2,15 @@ package independentProject;
 
 public interface VCF {
 
-	// get variables (or their averages)
+	// calculations for variant or average for file
 	public double getDepth();
 	public double getQualityScore();
-
-	// calculations for variant or average for file
-	public double getVariantMissingness();
-	public double getHomozogousRefGenotypeFreq();
-	public double getHomozygousAltGenotypeFreq();
-	public double getHeterozygosity();
-	public double getRefAlleleFreq();
-	public double getAltAlleleFreq();
+	// calcuated within instance initialization and then accessed through getters
+	public void calcVariantMissingness();
+	public void calcHomozogousRefGenotypeFreq();
+	public void calcHomozygousAltGenotypeFreq();
+	public void calcHeterozygosity();
+	public void calcRefAlleleFreq();
+	public void calcAltAlleleFreq();
 	
 }
