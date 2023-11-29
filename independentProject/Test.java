@@ -11,7 +11,7 @@ import java.util.Map;
 
 public class Test { // extends TestCase
 
-	// single threaded
+	// single threaded testing vcf interface this method is used in the gui
 	public static void parseVCFFile(BufferedReader reader) throws IOException {
 				
 		List<String> titles = new ArrayList<>();

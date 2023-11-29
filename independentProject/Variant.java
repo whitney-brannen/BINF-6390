@@ -24,8 +24,12 @@ public class Variant implements VCF {
 	private final int position;
 	private final String refAllele;
 	private final String altAllele;
-	private final Integer qualityScore;
-	private final int depth;
+	private final double qualityScore;
+	private int depth;
+	
+	/*
+	 * here need to all private variables for each of the calculations so they can be accessed quicker later
+	 */
 
 	
 	public Variant(Map<String,Object> variantLineInfo) {
@@ -42,13 +46,18 @@ public class Variant implements VCF {
 		this.position = Integer.valueOf(variantLineInfo.get("POS").toString());
 		this.refAllele = variantLineInfo.get("REF").toString();
 		this.altAllele = variantLineInfo.get("ALT").toString();
-		this.qualityScore = Integer.valueOf(variantLineInfo.get("QUAL").toString());
-		this.depth  = Integer.valueOf(Arrays.asList(variantLineInfo.get("INFO").toString().split("DP=")).get(1));
+		this.qualityScore = Double.valueOf(variantLineInfo.get("QUAL").toString());
+		try {
+			this.depth  = Integer.valueOf(Arrays.asList(variantLineInfo.get("INFO").toString().split("DP=")).get(1));
+			} 
+		catch (ArrayIndexOutOfBoundsException e) {
+			this.depth = 0;
+		}
 		
 		// add samples to a hashmap that can adjust size depending on input vcf
 		for (int x=9; x<variantLineInfo.size(); x++) { // can change for item in variantLineInfo if not in (headers) to be able to use a regular hashmap for performance later
 			String sampleName = keyList.get(x).toString();
-			String genotype = variantList.get(x).toString();
+			String genotype = variantList.get(x).toString().split(":")[0];
 			samples.put(sampleName, genotype);
 		}
 	}
