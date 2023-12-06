@@ -29,6 +29,10 @@ public class CombinedVariants implements VCF {
 		calcAltAlleleFreq();
 	}
 	
+	public List<Variant> getVars() {
+		return allVariants;
+	}
+	
 	public int numVariants() {
 		return allVariants.size();
 	}
@@ -137,10 +141,6 @@ public class CombinedVariants implements VCF {
 
 	public double getAltAlleleFreq() {
 		return altAlleleFreq;
-	}
-	
-	public static void main(String[] args) {
-
 	}
 
 }

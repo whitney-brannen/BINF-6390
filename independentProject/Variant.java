@@ -35,11 +35,6 @@ public class Variant implements VCF {
 	private double altAlleleFreq;
 	
 	
-	/*
-	 * here need to all private variables for each of the calculations so they can be accessed quicker later
-	 */
-
-	
 	public Variant(Map<String,Object> variantLineInfo) {
 		
 		this.variantLineInfo = variantLineInfo;
@@ -58,7 +53,7 @@ public class Variant implements VCF {
 		try {
 			this.depth  = Integer.valueOf(Arrays.asList(variantLineInfo.get("INFO").toString().split("DP=")).get(1));
 			} 
-		catch (ArrayIndexOutOfBoundsException e) {
+		catch (Exception e) {
 			this.depth = 0;
 		}
 		
@@ -97,12 +92,15 @@ public class Variant implements VCF {
 		
 		Variant other = (Variant) o;
 		
-		if ( this == o ) return true;
-		
-		if (o == null || getClass() != o.getClass()) return false;
-		
-		if ( position != other.position ) return true;
-		
+		if ( this == o ) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		if ( position != other.position ) {
+			return true;
+		}
 		return chromosome.equals(other.chromosome) ;
 	}
 	
@@ -113,7 +111,6 @@ public class Variant implements VCF {
 	    result = 31 * result + position;
 	    return result;
 	}
-	
 	
 	public String getChromosome() {
 		return chromosome;
@@ -242,11 +239,7 @@ public class Variant implements VCF {
 	public double getAltAlleleFreq() {
 		return altAlleleFreq;
 	}
-
-	public static void main(String[] args) {
-		
-	}
-
+	
 }
 
 
