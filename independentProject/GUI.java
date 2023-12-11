@@ -1,3 +1,6 @@
+/*
+ * currently not reupdating after filtering?
+ */
 package independentProject;
 
 import java.awt.BorderLayout;
@@ -7,7 +10,6 @@ import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -17,12 +19,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ExecutionException;
 
-import javax.swing.AbstractAction;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
@@ -52,24 +50,23 @@ public class GUI extends JFrame{
 	private volatile boolean parserCancel = false;
 	private JButton loadingCancelButton = new JButton("Cancel");
 	
-	private JPanel leftPanel = new JPanel(new BorderLayout());
-
+	private JPanel mainPanel = new JPanel( new BorderLayout() );
+	
 	private JLabel rightTitle = new JLabel();
 	private JButton depthButton = new JButton("Depth");
 	private JButton qualityButton = new JButton("Quality");
 	private JButton missingnessButton = new JButton("Variant Missingness");
 	
-	private JPanel filterOptionsPanel = new JPanel();
-	JCheckBox minimumBox = new JCheckBox("Set minimum value");
-	JCheckBox maximumBox = new JCheckBox("Set maximum value");
-	
-	private JTextField minValue = new JTextField(20);
-	private JTextField maxValue = new JTextField(20);
-	
 	private JFrame depth = new JFrame();
+	private JFrame quality = new JFrame();
+	private JFrame missingness = new JFrame();
 	
-	private CombinedVariants vcfFileStats; 
+	private JPanel depthFilterOptionsPanel = new JPanel();
+	private JPanel qualityFilterOptionsPanel = new JPanel();
+	private JPanel missingnessFilterOptionsPanel = new JPanel();
 	
+	private CombinedVariants vcfFileStats;
+	private CombinedVariants currentListOfVariants;
 
 	public GUI() {
 		this.vcfFileStats = null;
@@ -202,6 +199,7 @@ public class GUI extends JFrame{
 		}	
 		// Add all instances of Variant to the CombinedVariant class for avg calculations
 		vcfFileStats = new CombinedVariants(allVariantsInFile);
+		currentListOfVariants = vcfFileStats;
 	}
 	
 	public void updateLoadingText() {
@@ -244,7 +242,6 @@ public class GUI extends JFrame{
 	
 	public void resultsPage() {
 		
-		JPanel mainPanel = new JPanel( new BorderLayout() );
 		mainTextArea.setText("Your input file contains " + vcfFileStats.numVariants() + " variants.");
 		mainTextArea.setAlignmentX(CENTER_ALIGNMENT);
 		mainPanel.add(mainTextArea, BorderLayout.NORTH);
@@ -259,7 +256,7 @@ public class GUI extends JFrame{
 		leftGrid.setText( resultTextLeft(vcfFileStats) );
 		
 		JPanel rightGrid = new JPanel();
-		rightGrid.setLayout(new BoxLayout(rightGrid, BoxLayout.Y_AXIS));
+		rightGrid.setLayout(new GridLayout(4,1));
 		resultPanelRight(rightGrid);
 
 		grid.add(leftGrid);
@@ -270,28 +267,25 @@ public class GUI extends JFrame{
 		main.add(mainPanel);
 		main.setVisible(true);
 		
-		depthButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				remove(mainPanel);
-				displayDepthDetails();		
-			}
-		});
-		qualityButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				remove(mainPanel);
-				displayQualityDetails();
-			}
-		});
-		missingnessButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				remove(mainPanel);
-				displayMissingnessDetails();	
-			}
-		});
+        depthButton.addActionListener(this::depthButtonActionPerformed);
+        qualityButton.addActionListener(this::qualityButtonActionPerformed);
+        missingnessButton.addActionListener(this::missingnessButtonActionPerformed);
 	}
+	
+	   private void depthButtonActionPerformed(ActionEvent e) {
+	        main.remove(mainPanel);
+	        displayDepthDetails();
+	    }
+
+	    private void qualityButtonActionPerformed(ActionEvent e) {
+	        main.remove(mainPanel);
+	        displayQualityDetails();
+	    }
+
+	    private void missingnessButtonActionPerformed(ActionEvent e) {
+	        main.remove(mainPanel);
+	        displayMissingnessDetails();
+	    }
 
 	private String resultTextLeft(CombinedVariants variants) {
 		StringBuffer text = new StringBuffer();
@@ -307,7 +301,7 @@ public class GUI extends JFrame{
 	}
 	
 	private void resultPanelRight(JPanel rightGrid) {
-		rightTitle.setText(" Use buttons below for more details");
+		rightTitle.setText(" Use buttons below for more details and filtering");
 		rightGrid.setBackground(Color.white);
 		rightGrid.add(rightTitle);
 		rightGrid.add(depthButton);
@@ -315,61 +309,65 @@ public class GUI extends JFrame{
 		rightGrid.add(missingnessButton);
 	}
 	
+	
 	private void displayDepthDetails() {
-		
-		depth.setSize(600,400);
-		depth.setLocationRelativeTo(main);
-		depth.setLocationRelativeTo(null);
-		JPanel depthPanel = new JPanel ( new GridLayout(1,2) );
-		depth.setTitle("Depth");
+	    depth.setSize(600, 400);
+	    depth.setLocationRelativeTo(main);
+	    
+	    JPanel depthPanel = new JPanel(new BorderLayout());
+	    
+	    depthFilterOptions();
 
-		filterOptions("depth");
-				
-		JPanel header = new JPanel();
-		header.setBackground(Color.white);
+	    JPanel combinedPanel = new JPanel(new GridLayout(1, 2));
 
-		header.add(new JTextArea("Depth values: \n"));
-		leftPanel.add(header, BorderLayout.NORTH);
-		
-		StringBuffer depths = new StringBuffer();
-		for ( Variant v : vcfFileStats.getVars() ) {
-			depths.append(v.getDepth() + "\n");
-		}
-		JTextArea individualValues = new JTextArea(depths.toString());
-		JScrollPane scrollPane = new JScrollPane(individualValues);
-		scrollPane.createVerticalScrollBar();
-		leftPanel.add(scrollPane, BorderLayout.CENTER);
-		
-		depthPanel.add(leftPanel);
-		depthPanel.add(filterOptionsPanel);
-		
-		depth.add(depthPanel);
-		depth.setVisible(true);
-		
+	    JPanel leftPanel = new JPanel(new BorderLayout());
+	    JPanel header = new JPanel();
+	    header.setBackground(Color.white);
+	    JTextArea title = new JTextArea("Depth values: \n");
+	    title.setEditable(false);
+	    header.add(title);
+	    leftPanel.add(header, BorderLayout.NORTH);
+
+	    StringBuffer depths = new StringBuffer();
+	    for (Variant v : vcfFileStats.getVars()) {
+	        depths.append(v.getDepth() + "\n");
+	    }
+	    JTextArea individualValues = new JTextArea(depths.toString());
+	    JScrollPane scrollPane = new JScrollPane(individualValues);
+	    scrollPane.createVerticalScrollBar();
+	    leftPanel.add(scrollPane, BorderLayout.CENTER);
+
+	    combinedPanel.add(leftPanel);
+	    combinedPanel.add(depthFilterOptionsPanel); // Assuming filterOptionsPanel is defined globally
+
+	    depthPanel.add(combinedPanel, BorderLayout.CENTER);
+	    depth.setContentPane(depthPanel);
+	    depth.revalidate();
+	    depth.repaint();
+	    depth.setVisible(true);
 	}
+
 	
 	private void displayQualityDetails() {
-		JPanel qualityPanel = new JPanel ( new GridLayout(1,2) );
-		setTitle("Quality");
 		
-		filterOptions("quality");
+		quality.setSize(600,400);
+		quality.setLocationRelativeTo(main);
+		JPanel qualityPanel = new JPanel ( new GridLayout(1,2) );
+		quality.setTitle("Quality");
+		
+		qualityFilterOptions();
 		
 		JPanel leftPanel = new JPanel(new BorderLayout());
 		
 		JPanel header = new JPanel();
 		header.setBackground(Color.white);
-		header.add(new JButton(new AbstractAction("Back") {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				remove(qualityPanel);
-				resultsPage();	
-			}
-		}));
-		header.add(new JTextArea("Quality scores: \n"));
+		JTextArea title = new JTextArea("Quality scores: \n");
+		title.setEditable(false);
+		header.add(title);
 		leftPanel.add(header, BorderLayout.NORTH);
 		
 		StringBuffer quals = new StringBuffer();
-		for ( Variant v : vcfFileStats.getVars() ) {
+		for ( Variant v : currentListOfVariants.getVars() ) {
 			quals.append(v.getQualityScore() + "\n");
 		}
 		JTextArea individualValues = new JTextArea(quals.toString());
@@ -378,30 +376,30 @@ public class GUI extends JFrame{
 		leftPanel.add(scrollPane, BorderLayout.CENTER);
 		
 		qualityPanel.add(leftPanel);
-		qualityPanel.add(filterOptionsPanel);
+		qualityPanel.add(qualityFilterOptionsPanel);
 		
-		add(qualityPanel);
-		setVisible(true);
+		quality.setContentPane(qualityPanel);
+		quality.revalidate();
+		quality.repaint();
+		quality.setVisible(true);
 	}
 	
 	private void displayMissingnessDetails() {
-		JPanel missingnessPanel = new JPanel ( new GridLayout(1,2) );
-		setTitle("Missingness");
 		
-		filterOptions("missingness");
+		missingness.setSize(600,400);
+		missingness.setLocationRelativeTo(main);
+		JPanel missingnessPanel = new JPanel ( new GridLayout(1,2) );
+		missingness.setTitle("Missingness");
+		
+		missingnessFilterOptions();
 		
 		JPanel leftPanel = new JPanel(new BorderLayout());
 		
 		JPanel header = new JPanel();
 		header.setBackground(Color.white);
-		header.add(new JButton(new AbstractAction("Back") {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				remove(missingnessPanel);
-				resultsPage();	
-			}
-		}));
-		header.add(new JTextArea("Missingness values: \n"));
+		JTextArea title = new JTextArea("Missingness values: \n");
+		title.setEditable(false);
+		header.add(title);
 		leftPanel.add(header, BorderLayout.NORTH);
 		
 		StringBuffer missing = new StringBuffer();
@@ -414,118 +412,284 @@ public class GUI extends JFrame{
 		leftPanel.add(scrollPane, BorderLayout.CENTER);
 		
 		missingnessPanel.add(leftPanel);
-		missingnessPanel.add(filterOptionsPanel);
+		missingnessPanel.add(missingnessFilterOptionsPanel);
 		
-		add(missingnessPanel);
-		setVisible(true);
+		missingness.setContentPane(missingnessPanel);
+		missingness.revalidate();
+		missingness.repaint();
+		missingness.setVisible(true);
 	}
 	
-	private void filterOptions(String stat) {
-		filterOptionsPanel.setLayout( new BorderLayout() );
-		JTextArea title = new JTextArea("Apply filters for " + stat);
-		title.setMargin(new Insets(10,10,10,10));
-		JPanel options = new JPanel(new GridLayout(3,1));
-		JPanel min = new JPanel ();
-		JPanel max = new JPanel();
-		JButton filterData = new JButton("Apply filters");
-		
-		filterOptionsPanel.add(title, BorderLayout.NORTH);
-		min.add(minimumBox);
-		min.add(minValue);
-		
-		max.add(maximumBox);
-		max.add(maxValue);
-		
-		options.add(min);
-		options.add(max);
-		options.add(filterData);
-		filterOptionsPanel.add(options);
-		
-		minValue.setEnabled(false);
-		maxValue.setEnabled(false);
-		filterData.setEnabled(false);
-		
-		minimumBox.addItemListener(new ItemListener() {
-			@Override
-			public void itemStateChanged(ItemEvent e) {
-				if ( e.getStateChange() == ItemEvent.SELECTED ) {
-					minValue.setEnabled(true);
-					minValue.requestFocus();
-					filterData.setEnabled(true);
-				}
-				else {
-					minValue.setEnabled(false);
-					minValue.setText(null);
-				}
-			}	
-		});
-		maximumBox.addItemListener(new ItemListener() {
-			@Override
-			public void itemStateChanged(ItemEvent e) {
-				if ( e.getStateChange() == ItemEvent.SELECTED ) {
-					maxValue.setEnabled(true);
-					maxValue.requestFocus();
-					filterData.setEnabled(true);
-				}
-				else {
-					maxValue.setEnabled(false);
-					maxValue.setText(null);
-				}
-			}
-		});
-		
-		filterData.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				try {
-					Float min = null;
-					Float max = null;
-					if (! minValue.getText().equals(null) && ! minValue.getText().isEmpty()) {
-						min = Float.parseFloat(minValue.getText());
-					}
-					if (! maxValue.getText().equals(null) && ! maxValue.getText().isEmpty()) {
-						max = Float.parseFloat(maxValue.getText());
-					}
-					if ( min!=null && max!=null ) {
-						if ( min > max ) {
-							throw new IllegalArgumentException();
-						}
-					}
-					
-					filterData(min,max);
-				}
-				catch (NumberFormatException ex) {
-					JOptionPane.showMessageDialog(depth,"Filter must be a numerical value.");
-				}
-				catch (IllegalArgumentException ex) {
-					JOptionPane.showMessageDialog(depth, "Minimum value must be less than maximum value");
-				}
-			}
-		});
-		
-	}
 	
-	private void filterData(Float min, Float max) {
-		List<Variant> filtered = new ArrayList<>();
-		for ( Variant v : vcfFileStats.getVars() ) {
-			double stat = v.getDepth();
-		    if ((min == null || stat >= min) && (max == null || stat <= max)) {
-                filtered.add(v);
-		    }
-		} 
+	public void depthFilterOptions() {
+	    depthFilterOptionsPanel.setLayout(new BorderLayout());
+	    JTextArea title = new JTextArea("Apply filters for Depth");
+	    title.setMargin(new Insets(10, 10, 10, 10));
+	    JPanel options = new JPanel(new GridLayout(5, 1));
+
+	    JCheckBox minimumBox = new JCheckBox("Set minimum value");
+	    JCheckBox maximumBox = new JCheckBox("Set maximum value");
+
+	    JTextField minValue = new JTextField(20);
+	    JTextField maxValue = new JTextField(20);
+
+	    JButton filterData = new JButton("Apply filters");
+
+	    depthFilterOptionsPanel.add(title, BorderLayout.NORTH);
+	    options.add(minimumBox);
+	    options.add(minValue);
+	    options.add(maximumBox);
+	    options.add(maxValue);
+	    options.add(filterData);
+	    depthFilterOptionsPanel.add(options);
+
+	    minValue.setEnabled(false);
+	    maxValue.setEnabled(false);
+	    filterData.setEnabled(false);
+
+	    minimumBox.addItemListener(e -> {
+	        if (e.getStateChange() == ItemEvent.SELECTED) {
+	            minValue.setEnabled(true);
+	            minValue.requestFocus();
+	            filterData.setEnabled(true);
+	        } else {
+	            minValue.setEnabled(false);
+	            minValue.setText(null);
+	        }
+	    });
+
+	    maximumBox.addItemListener(e -> {
+	        if (e.getStateChange() == ItemEvent.SELECTED) {
+	            maxValue.setEnabled(true);
+	            maxValue.requestFocus();
+	            filterData.setEnabled(true);
+	        } else {
+	            maxValue.setEnabled(false);
+	            maxValue.setText(null);
+	        }
+	    });
+
+	    filterData.addActionListener(e -> {
+	        applyDepthFilters(minValue, maxValue, minimumBox, maximumBox);
+	    });
+	}
+
+	public void qualityFilterOptions() {
+	    qualityFilterOptionsPanel.setLayout(new BorderLayout());
+	    JTextArea title = new JTextArea("Apply filters for Quality");
+	    title.setMargin(new Insets(10, 10, 10, 10));
+	    JPanel options = new JPanel(new GridLayout(5, 1));
+
+	    JCheckBox minimumBox = new JCheckBox("Set minimum value");
+	    JCheckBox maximumBox = new JCheckBox("Set maximum value");
+
+	    JTextField minValue = new JTextField(20);
+	    JTextField maxValue = new JTextField(20);
+
+	    JButton filterData = new JButton("Apply filters");
+
+	    qualityFilterOptionsPanel.add(title, BorderLayout.NORTH);
+	    options.add(minimumBox);
+	    options.add(minValue);
+	    options.add(maximumBox);
+	    options.add(maxValue);
+	    options.add(filterData);
+	    qualityFilterOptionsPanel.add(options);
+
+	    minValue.setEnabled(false);
+	    maxValue.setEnabled(false);
+	    filterData.setEnabled(false);
+
+	    minimumBox.addItemListener(e -> {
+	        if (e.getStateChange() == ItemEvent.SELECTED) {
+	            minValue.setEnabled(true);
+	            minValue.requestFocus();
+	            filterData.setEnabled(true);
+	        } else {
+	            minValue.setEnabled(false);
+	            minValue.setText(null);
+	        }
+	    });
+
+	    maximumBox.addItemListener(e -> {
+	        if (e.getStateChange() == ItemEvent.SELECTED) {
+	            maxValue.setEnabled(true);
+	            maxValue.requestFocus();
+	            filterData.setEnabled(true);
+	        } else {
+	            maxValue.setEnabled(false);
+	            maxValue.setText(null);
+	        }
+	    });
+
+	    filterData.addActionListener(e -> {
+	        applyQualityFilters(minValue, maxValue, minimumBox, maximumBox);
+	    });
+	}
+
+	public void missingnessFilterOptions() {
+	    missingnessFilterOptionsPanel.setLayout(new BorderLayout());
+	    JTextArea title = new JTextArea("Apply filters for Missingness");
+	    title.setMargin(new Insets(10, 10, 10, 10));
+	    JPanel options = new JPanel(new GridLayout(5, 1));
+
+	    JCheckBox minimumBox = new JCheckBox("Set minimum value");
+	    JCheckBox maximumBox = new JCheckBox("Set maximum value");
+
+	    JTextField minValue = new JTextField(20);
+	    JTextField maxValue = new JTextField(20);
+
+	    JButton filterData = new JButton("Apply filters");
+
+	    missingnessFilterOptionsPanel.add(title, BorderLayout.NORTH);
+	    options.add(minimumBox);
+	    options.add(minValue);
+	    options.add(maximumBox);
+	    options.add(maxValue);
+	    options.add(filterData);
+	    missingnessFilterOptionsPanel.add(options);
+
+	    minValue.setEnabled(false);
+	    maxValue.setEnabled(false);
+	    filterData.setEnabled(false);
+
+	    minimumBox.addItemListener(e -> {
+	        if (e.getStateChange() == ItemEvent.SELECTED) {
+	            minValue.setEnabled(true);
+	            minValue.requestFocus();
+	            filterData.setEnabled(true);
+	        } else {
+	            minValue.setEnabled(false);
+	            minValue.setText(null);
+	        }
+	    });
+
+	    maximumBox.addItemListener(e -> {
+	        if (e.getStateChange() == ItemEvent.SELECTED) {
+	            maxValue.setEnabled(true);
+	            maxValue.requestFocus();
+	            filterData.setEnabled(true);
+	        } else {
+	            maxValue.setEnabled(false);
+	            maxValue.setText(null);
+	        }
+	    });
+
+	    filterData.addActionListener(e -> {
+	        applyMissingnessFilters(minValue, maxValue, minimumBox, maximumBox);
+	    });
+	}
+
+	public void applyDepthFilters(JTextField minValueField, JTextField maxValueField, JCheckBox minimumBox, JCheckBox maximumBox) {
+	    applyFilters("depth", minValueField, maxValueField);
+	    resetFilterOptions(minimumBox, minValueField, maximumBox, maxValueField);
+
+	}
+
+	public void applyQualityFilters(JTextField minValueField, JTextField maxValueField, JCheckBox minimumBox, JCheckBox maximumBox) {
+	    applyFilters("quality", minValueField, maxValueField);
+	    resetFilterOptions(minimumBox, minValueField, maximumBox, maxValueField);
+
+	}
+
+	public void applyMissingnessFilters(JTextField minValueField, JTextField maxValueField, JCheckBox minimumBox, JCheckBox maximumBox) {
+	    applyFilters("missingness", minValueField, maxValueField);
+	    resetFilterOptions(minimumBox, minValueField, maximumBox, maxValueField);
+
+	}
+
+	private void applyFilters(String stat, JTextField minValueField, JTextField maxValueField) {
+	    try {
+	        Float min = null;
+	        Float max = null;
+
+	        if (!minValueField.getText().isEmpty()) {
+	            min = Float.parseFloat(minValueField.getText());
+	        }
+	        if (!maxValueField.getText().isEmpty()) {
+	            max = Float.parseFloat(maxValueField.getText());
+	        }
+
+	        if (min != null && max != null && min > max) {
+	            throw new IllegalArgumentException("Minimum value must be less than maximum value");
+	        }
+
+	        List<Variant> filteredVariants = new ArrayList<>();
+
+	        for (Variant v : currentListOfVariants.getVars()) {
+	            Double statValue = null;
+
+	            switch (stat) {
+	                case "depth":
+	                    statValue = v.getDepth();
+	                    break;
+	                case "quality":
+	                    statValue = v.getQualityScore();
+	                    break;
+	                case "missingness":
+	                    statValue = v.getVariantMissingness();
+	                    break;
+	            }
+
+	            if ((min == null || statValue >= min) && (max == null || statValue <= max)) {
+	                filteredVariants.add(v);
+	            }
+	        }
+	        currentListOfVariants = new CombinedVariants(filteredVariants);
+
+	        updateFilteredStats();
+
+	    } catch (NumberFormatException ex) {
+	        JOptionPane.showMessageDialog(main, "Filter must be a numerical value.");
+	    } catch (IllegalArgumentException ex) {
+	        JOptionPane.showMessageDialog(main, ex.getMessage());
+	    }
+	}
+	private void resetFilterOptions(JCheckBox minimumBox, JTextField minValueField,JCheckBox maximumBox, JTextField maxValueField) {
 		
-		String updated = resultTextLeft(new CombinedVariants(filtered));
-		JPanel updatedStats = new JPanel ( new GridLayout(0,2) );
-		JTextArea stats = new JTextArea("Your filtered file contains " + filtered.size() + " variants" + newline);
-		stats.append(updated);
+			minimumBox.setSelected(false);
+			minValueField.setText(null);
+			minValueField.setEnabled(false);
+			
+			maximumBox.setSelected(false);
+			maxValueField.setText(null);
+			maxValueField.setEnabled(false);
+	}
+
+
+	private void updateFilteredStats() {
+		
+		JPanel updatedStats = new JPanel ( new GridLayout(1,2) );
+		
+		JPanel rightSide = new JPanel(new GridLayout(4,0));
+
+		JTextField titleText = new JTextField("\nRefilter\n");
+		titleText.setEditable(false);
+		rightSide.add(titleText);
+		rightSide.add(depthButton);
+		rightSide.add(qualityButton);
+		rightSide.add(missingnessButton);
+		rightSide.setBackground(Color.white);
+		
+		JTextArea stats = new JTextArea("Your filtered file contains " + currentListOfVariants.getVars().size() + " variants" + newline);
+		stats.append( ( vcfFileStats.numVariants() - currentListOfVariants.getVars().size() + " variants have been removed." + newline + newline));
+		stats.append(resultTextLeft(currentListOfVariants));
 		stats.setLineWrap(true);
 		stats.setWrapStyleWord(true);
 		stats.setMargin(new Insets(10,10,10,10));
-
-		
+		stats.setEditable(false);
 		updatedStats.add(stats);
+		updatedStats.add(rightSide);
 		
 		main.add(updatedStats);
+		
+        depthButton.addActionListener(this::depthButtonActionPerformed);
+        qualityButton.addActionListener(this::qualityButtonActionPerformed);
+        missingnessButton.addActionListener(this::missingnessButtonActionPerformed);
+		
+		main.revalidate();
+		main.repaint();
+
 		main.setVisible(true);
 	}
 
