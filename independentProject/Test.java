@@ -13,16 +13,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class Test { // extends TestCase
+public class Test { 
 
-	// single threaded testing vcf interface this method is used in the gui
+	// single threaded testing vcf interface 
 	public static void parseVCFFile(BufferedReader reader) throws IOException {
 				
 		List<String> titles = new ArrayList<>();
 		
 		List<Variant> allVariantsInFile = new ArrayList<>(); 
 		
-		// I plan on later changing this to be multithreaded
 		while ( reader.ready() ) {
 						
 			List<Object> values = new ArrayList<>();
