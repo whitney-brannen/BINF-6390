@@ -7,7 +7,6 @@ public class CombinedVariants implements VCF {
 	
 	/*
 	 * This class calculates the averages of all variants for an entire vcf file
-	 * I may need to do a calc and get method for each method where calculate is called in the constructor so get can be quick later
 	 */
 
 	private final List<Variant> allVariants;

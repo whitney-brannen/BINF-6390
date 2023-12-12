@@ -185,11 +185,11 @@ public class Variant implements VCF {
 		for ( String genotype : samples.values() ) {
 			String[] splitGenotype = genotype.split("/");
 			for ( String allele : splitGenotype) {
-				if ( allele.equals(".") ) {
-					alleleList.add(9);
-				}
-				else { 
+				if ( allele.equals("0") || allele.equals("1") ) {
 					alleleList.add(Integer.valueOf(allele));
+				}
+				else {
+					alleleList.add(9); // handle missing data
 				}
 			}
 		}

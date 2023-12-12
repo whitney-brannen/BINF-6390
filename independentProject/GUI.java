@@ -1,31 +1,39 @@
-/*
- * currently not reupdating after filtering?
- */
 package independentProject;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -45,6 +53,7 @@ public class GUI extends JFrame{
 	private JButton chooseFileButton = new JButton("Select a file");
 	private final JFileChooser fileChooser = new JFileChooser( FileSystemView.getFileSystemView() );
 	
+	private List<String> titles = new ArrayList<>();
 	private Thread backgroundParser = new Thread();
 	private volatile boolean backgroundParserRunning = false;
 	private volatile boolean parserCancel = false;
@@ -67,6 +76,8 @@ public class GUI extends JFrame{
 	
 	private CombinedVariants vcfFileStats;
 	private CombinedVariants currentListOfVariants;
+	
+	private JFileChooser saveFileChooser = new JFileChooser( FileSystemView.getFileSystemView() );
 
 	public GUI() {
 		this.vcfFileStats = null;
@@ -74,21 +85,26 @@ public class GUI extends JFrame{
 	}
 
 	public void initializeHomePage() {
-		main.setTitle("title");
+		main.setTitle("Interactive VCF File Filter");
 		main.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		main.setSize(700, 500);
 		main.setLocationRelativeTo(null);
         
         JPanel panel = new JPanel(new BorderLayout());
         
-        mainTextArea.setText("Use this program to ....\n\nWorks best if you....\n");
+        mainTextArea.setText(newline + "Use this program to view statistics and interactively modify filters for your VCF file!" + newline);
+        mainTextArea.append("Statistics include: \n\t- read depth\n\t- variant missingness\n\t- homozygous and heterozygous genotype frequencies\n\t- reference and alternative allele frequencies" + newline);
+        mainTextArea.append("This program works by filtering files by variant (individual options not yet included).\n");
+        mainTextArea.append("Filter options will exclude any variants that do not fall within your specified parameters of\n\t- read depth\n\t- quality score\n\t- variant missingness" + newline);
+        mainTextArea.append("Filters can be interactively edited within this program to view the changes to the overall statistics of your file." + newline);
+        mainTextArea.append("After applying filters, there is an option to save the filtered file to your computer.");
         mainTextArea.setEditable(false);
-        mainTextArea.setMargin(new Insets(10, 10, 10, 10));
-        panel.add(mainTextArea);
+        mainTextArea.setLineWrap(true);
+        mainTextArea.setWrapStyleWord(true);
+        mainTextArea.setMargin(new Insets(20,20,20,20));
         
-        JPanel fileSelectionPanel = new JPanel();
-        fileSelectionPanel.add(chooseFileButton);
-        panel.add(fileSelectionPanel, BorderLayout.PAGE_END);
+        panel.add(mainTextArea);
+        panel.add(chooseFileButton,BorderLayout.SOUTH);
                 
         chooseFileButton.addActionListener(new ActionListener() {
 			@Override
@@ -123,7 +139,7 @@ public class GUI extends JFrame{
 		panel.add(loadingCancelButton,BorderLayout.SOUTH);
 		main.add(panel);
 		
-		mainTextArea.setText("File Selected: " + fileChooser.getSelectedFile().getAbsolutePath() + "\n");
+		mainTextArea.setText("\nFile Selected: " + fileChooser.getSelectedFile().getAbsolutePath() + newline);
 		
 		BufferedReader reader = new BufferedReader( new FileReader( fileChooser.getSelectedFile() ));
 		launchBackgroundParserThread(reader);
@@ -135,15 +151,21 @@ public class GUI extends JFrame{
 		loadingCancelButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				parserCancel = true;
-				mainTextArea.setText("Operation Cancelled");
-				loadingCancelButton.setVisible(false);
+				try {
+					parserCancel = true;
+					loadingCancelButton.setVisible(false);
+					System.exit(0);
+					
+				} catch (Exception ex) {
+					ex.printStackTrace();
+					System.exit(1);
+				}
 			}
 		});
 	
 	}
 	
-	public void launchBackgroundParserThread(BufferedReader reader) {
+	private void launchBackgroundParserThread(BufferedReader reader) {
 		backgroundParser = new Thread ( new Runnable() {
 			@Override
 			public void run() {
@@ -151,10 +173,13 @@ public class GUI extends JFrame{
 					backgroundParserRunning = true;
 					if ( !parserCancel ) {
 						parseFile(reader);
+						if ( Thread.interrupted() ) {
+							mainTextArea.setText(" Operation Cancelled ");
+						}
 					}
 					backgroundParserRunning = false;
 					loadingCancelButton.setVisible(false);
-				} catch (IOException | InterruptedException e ) {
+				} catch (Exception e ) {
 					e.printStackTrace();
 					backgroundParserRunning = false;
 				}
@@ -162,53 +187,118 @@ public class GUI extends JFrame{
 		backgroundParser.start();
 	}
 	
-	public void parseFile(BufferedReader reader) throws IOException, InterruptedException {
-		
-		List<String> titles = new ArrayList<>();
-		List<Variant> allVariantsInFile = new ArrayList<>(); 
-		
-		// I plan on later changing this to be multithreaded, divide number of lines by threads and each thread reads its set of lines?
-		while ( reader.ready() ) {
+	private class FileParserWorker implements Runnable {
+	    	
+	    	private final BlockingQueue<String> queue;
+	    	private final List<String >titles;
+			private final CountDownLatch latch;
+			private List<Variant >allVariantsInFile;
+	    	
+	    	public FileParserWorker(BlockingQueue<String> queue, List<String> titles, CountDownLatch latch,List<Variant> allVariantsInFile) {
+	    		this.queue = queue;
+	    		this.titles = titles;
+	    		this.latch = latch;
+	    		this.allVariantsInFile = allVariantsInFile;
+	    	}
+	    	
+			@Override
+			public void run() {
+				
+				try {
+					
+					latch.await();
+					
+					while(true) {
+					
+						String line = queue.take();
 						
-			List<Object> values = new ArrayList<>();
-			Map<String,Object> variantLineInfo= new LinkedHashMap<>();
+						   if (line.equals("EOF")) {
+						        break;
+						   }
+						   
+						List<Object> values = new ArrayList<>();
+						Map<String,Object> variantLineInfo= new HashMap<>();
+		
+						// all other lines that aren't headers
+						if ( !line.startsWith("##") ) {
+							Object[] variantLine = line.split("\t");
+							values = Arrays.asList(variantLine);
+						}
+						
+						// create hashmap for each category for variants
+						for (int x = 0; x < values.size(); x++ ) {
+							String key = titles.get(x);
+							Object val = values.get(x);
+							variantLineInfo.put(key, val);	
+						}
+						
+						// now create Variant instance for each line
+						if (variantLineInfo.get("#CHROM") != null && !variantLineInfo.get("#CHROM").equals("#CHROM")) {
+							Variant instance = new Variant(variantLineInfo);
+							allVariantsInFile.add(instance);
+	
+						}
+					}	   
+					
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+					System.exit(1);
+				}
+			}
+	    }
+	
+	
+	private void parseFile(BufferedReader reader) {
+		
+		int maxNumThreads = Runtime.getRuntime().availableProcessors()+1;
+		
+		BlockingQueue<String> queue = new LinkedBlockingQueue<>();
+		List<String> titles = new CopyOnWriteArrayList<>(); 
+		CountDownLatch latch = new CountDownLatch(1);
+		List<Variant> allVariantsInFile = new CopyOnWriteArrayList<>();
+		
+		try { 
+			while ( reader.ready() && !parserCancel ) {
+				String line = reader.readLine();
+				if (line.startsWith("#CHROM")) {
+					String[] titleLine = line.split("\t");
+			        titles = new ArrayList<>(Arrays.asList(titleLine));
+					latch.countDown(); // block until titles is established from the file or parsing will fail
+				}
+			    queue.put(line);
+			}
 			
-			String line = reader.readLine();
+			List<Thread> workerThreads = new ArrayList<>();
 			
-			// handle title line
-			if (line.startsWith("#CHROM")) {
-				String[] titleLine = line.split("\t");
-				titles = Arrays.asList(titleLine);
+			for (int i =0; i < maxNumThreads; i++) {
+			    Thread workerThread = new Thread(new FileParserWorker(queue, titles, latch, allVariantsInFile));
+			    workerThreads.add(workerThread);
+			    workerThread.start();
+			    queue.put("EOF");
 			}
-			// all other lines that aren't headers
-			if ( !line.startsWith("##") ) {
-				Object[] variantLine = line.split("\t");
-				values = Arrays.asList(variantLine);
+			
+			for (Thread workerThread : workerThreads) {
+				workerThread.join();
 			}
-			// create hashmap for each category for variants
-			for (int x = 0; x < values.size(); x++ ) {
-				String key = titles.get(x);
-				Object val = values.get(x);
-				variantLineInfo.put(key, val);	
-			}
-			// now create Variant instance for each line
-			if (variantLineInfo.get("#CHROM") != null && !variantLineInfo.get("#CHROM").equals("#CHROM")) {
-				Variant instance = new Variant(variantLineInfo);
-				allVariantsInFile.add(instance);
-			}
-		}	
-		// Add all instances of Variant to the CombinedVariant class for avg calculations
-		vcfFileStats = new CombinedVariants(allVariantsInFile);
-		currentListOfVariants = vcfFileStats;
+			vcfFileStats = new CombinedVariants(allVariantsInFile);
+			currentListOfVariants = vcfFileStats;
+		} 
+
+		catch (InterruptedException | IOException ex) {
+			ex.printStackTrace();
+		}
+		
 	}
+
 	
 	public void updateLoadingText() {
 	    SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
 	        @Override
 	        protected Void doInBackground() throws Exception {
+	        	
 	            while (backgroundParserRunning && !parserCancel) {
-	                publish("Loading...\n");
-	                Thread.sleep(1000);
+	            	publish("Loading VCF file...\n");
+	                Thread.sleep(2000);
 	            }
 	            return null;
 	        }
@@ -225,14 +315,9 @@ public class GUI extends JFrame{
 	            try {
 					get();
 					resultsPage();
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
+				} catch (InterruptedException | ExecutionException e) {
 					e.printStackTrace();
-				} catch (ExecutionException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-	            
+				}  
 	        }
 	    };
 
@@ -242,8 +327,10 @@ public class GUI extends JFrame{
 	
 	public void resultsPage() {
 		
-		mainTextArea.setText("Your input file contains " + vcfFileStats.numVariants() + " variants.");
-		mainTextArea.setAlignmentX(CENTER_ALIGNMENT);
+		mainTextArea.setText("\t\tYour input file contains " + vcfFileStats.numVariants() + " variants.");
+        Font boldFont = new Font(mainTextArea.getFont().getName(), Font.BOLD, mainTextArea.getFont().getSize());
+        mainTextArea.setFont(boldFont);
+        
 		mainPanel.add(mainTextArea, BorderLayout.NORTH);
 		
 		JPanel grid = new JPanel( new GridLayout(0,2) );
@@ -253,7 +340,7 @@ public class GUI extends JFrame{
 		leftGrid.setLineWrap(true);
 		leftGrid.setWrapStyleWord(true);
 		leftGrid.setEditable(false);
-		leftGrid.setText( resultTextLeft(vcfFileStats) );
+		leftGrid.setText( resultTextLeft() );
 		
 		JPanel rightGrid = new JPanel();
 		rightGrid.setLayout(new GridLayout(4,1));
@@ -287,22 +374,23 @@ public class GUI extends JFrame{
 	        displayMissingnessDetails();
 	    }
 
-	private String resultTextLeft(CombinedVariants variants) {
+	private String resultTextLeft() {
 		StringBuffer text = new StringBuffer();
-		text.append("Average read depth: " + variants.getDepth() + newline);
-		text.append("Average quality score: " + variants.getQualityScore() + newline);
-		text.append("Average Variant Missingness: " + variants.getVariantMissingness() + newline);
-		text.append("Average homozygous reference (0/0) genotype frequency: " + variants.getHomozygousRefGenotypeFreq() + newline);
-		text.append("Average homozygous alternative (1/1) genotype frequency: " + variants.getHomozygousAltGenotypeFreq() + newline);
-		text.append("Average heterozygosity: " + variants.getHeterozygosity() + newline);
-		text.append("Average reference allele frequency: " + variants.getRefAlleleFreq() + newline);
-		text.append("Average alternative allele frequency: " + variants.getAltAlleleFreq() + newline);
+		DecimalFormat df = new DecimalFormat("#.###");
+		text.append("Average read depth: " + df.format( currentListOfVariants.getDepth() ) + newline);
+		text.append("Average quality score: " + df.format( currentListOfVariants.getQualityScore() ) + newline);
+		text.append("Average Variant Missingness: " + df.format( currentListOfVariants.getVariantMissingness() ) + newline);
+		text.append("Average homozygous reference (0/0) genotype frequency: " + df.format( currentListOfVariants.getHomozygousRefGenotypeFreq() ) + newline);
+		text.append("Average homozygous alternative (1/1) genotype frequency: " + df.format( currentListOfVariants.getHomozygousAltGenotypeFreq() ) + newline);
+		text.append("Average heterozygosity: " + df.format( currentListOfVariants.getHeterozygosity() ) + newline);
+		text.append("Average reference allele frequency: " + df.format( currentListOfVariants.getRefAlleleFreq() ) + newline);
+		text.append("Average alternative allele frequency: " + df.format( currentListOfVariants.getAltAlleleFreq() ) + newline);
 		return text.toString();
 	}
 	
 	private void resultPanelRight(JPanel rightGrid) {
-		rightTitle.setText(" Use buttons below for more details and filtering");
-		rightGrid.setBackground(Color.white);
+		rightTitle.setText(" Use buttons below for more details and filtering: ");
+		//rightGrid.setBackground(Color.white);
 		rightGrid.add(rightTitle);
 		rightGrid.add(depthButton);
 		rightGrid.add(qualityButton);
@@ -313,6 +401,7 @@ public class GUI extends JFrame{
 	private void displayDepthDetails() {
 	    depth.setSize(600, 400);
 	    depth.setLocationRelativeTo(main);
+	    depth.setTitle("Read Depth Details");
 	    
 	    JPanel depthPanel = new JPanel(new BorderLayout());
 	    
@@ -338,7 +427,7 @@ public class GUI extends JFrame{
 	    leftPanel.add(scrollPane, BorderLayout.CENTER);
 
 	    combinedPanel.add(leftPanel);
-	    combinedPanel.add(depthFilterOptionsPanel); // Assuming filterOptionsPanel is defined globally
+	    combinedPanel.add(depthFilterOptionsPanel); 
 
 	    depthPanel.add(combinedPanel, BorderLayout.CENTER);
 	    depth.setContentPane(depthPanel);
@@ -352,8 +441,8 @@ public class GUI extends JFrame{
 		
 		quality.setSize(600,400);
 		quality.setLocationRelativeTo(main);
+		quality.setTitle("Quality Score Details");
 		JPanel qualityPanel = new JPanel ( new GridLayout(1,2) );
-		quality.setTitle("Quality");
 		
 		qualityFilterOptions();
 		
@@ -388,8 +477,8 @@ public class GUI extends JFrame{
 		
 		missingness.setSize(600,400);
 		missingness.setLocationRelativeTo(main);
+		missingness.setTitle("Variant Missingness Details");
 		JPanel missingnessPanel = new JPanel ( new GridLayout(1,2) );
-		missingness.setTitle("Missingness");
 		
 		missingnessFilterOptions();
 		
@@ -447,31 +536,41 @@ public class GUI extends JFrame{
 	    maxValue.setEnabled(false);
 	    filterData.setEnabled(false);
 
-	    minimumBox.addItemListener(e -> {
-	        if (e.getStateChange() == ItemEvent.SELECTED) {
-	            minValue.setEnabled(true);
-	            minValue.requestFocus();
-	            filterData.setEnabled(true);
-	        } else {
-	            minValue.setEnabled(false);
-	            minValue.setText(null);
-	        }
+	    minimumBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+		        if (e.getStateChange() == ItemEvent.SELECTED) {
+		            minValue.setEnabled(true);
+		            minValue.requestFocus();
+		            filterData.setEnabled(true);
+		        } else {
+		            minValue.setEnabled(false);
+		            minValue.setText(null);
+		        }
+			}
 	    });
 
-	    maximumBox.addItemListener(e -> {
-	        if (e.getStateChange() == ItemEvent.SELECTED) {
-	            maxValue.setEnabled(true);
-	            maxValue.requestFocus();
-	            filterData.setEnabled(true);
-	        } else {
-	            maxValue.setEnabled(false);
-	            maxValue.setText(null);
-	        }
+	    maximumBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+		        if (e.getStateChange() == ItemEvent.SELECTED) {
+		            maxValue.setEnabled(true);
+		            maxValue.requestFocus();
+		            filterData.setEnabled(true);
+		        } else {
+		            maxValue.setEnabled(false);
+		            maxValue.setText(null);
+		        }	
+			}
 	    });
 
-	    filterData.addActionListener(e -> {
-	        applyDepthFilters(minValue, maxValue, minimumBox, maximumBox);
-	    });
+	    filterData.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+		        applyDepthFilters(minValue, maxValue, minimumBox, maximumBox);
+		        depth.dispose();
+			}	
+		});
 	}
 
 	public void qualityFilterOptions() {
@@ -500,31 +599,41 @@ public class GUI extends JFrame{
 	    maxValue.setEnabled(false);
 	    filterData.setEnabled(false);
 
-	    minimumBox.addItemListener(e -> {
-	        if (e.getStateChange() == ItemEvent.SELECTED) {
-	            minValue.setEnabled(true);
-	            minValue.requestFocus();
-	            filterData.setEnabled(true);
-	        } else {
-	            minValue.setEnabled(false);
-	            minValue.setText(null);
-	        }
+	    minimumBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+		        if (e.getStateChange() == ItemEvent.SELECTED) {
+		            minValue.setEnabled(true);
+		            minValue.requestFocus();
+		            filterData.setEnabled(true);
+		        } else {
+		            minValue.setEnabled(false);
+		            minValue.setText(null);
+		        }
+			}
 	    });
 
-	    maximumBox.addItemListener(e -> {
-	        if (e.getStateChange() == ItemEvent.SELECTED) {
-	            maxValue.setEnabled(true);
-	            maxValue.requestFocus();
-	            filterData.setEnabled(true);
-	        } else {
-	            maxValue.setEnabled(false);
-	            maxValue.setText(null);
-	        }
+	    maximumBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+		        if (e.getStateChange() == ItemEvent.SELECTED) {
+		            maxValue.setEnabled(true);
+		            maxValue.requestFocus();
+		            filterData.setEnabled(true);
+		        } else {
+		            maxValue.setEnabled(false);
+		            maxValue.setText(null);
+		        }	
+			}
 	    });
 
-	    filterData.addActionListener(e -> {
-	        applyQualityFilters(minValue, maxValue, minimumBox, maximumBox);
-	    });
+	    filterData.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+		        applyQualityFilters(minValue, maxValue, minimumBox, maximumBox);
+		        quality.dispose();
+			}	
+		});
 	}
 
 	public void missingnessFilterOptions() {
@@ -553,31 +662,41 @@ public class GUI extends JFrame{
 	    maxValue.setEnabled(false);
 	    filterData.setEnabled(false);
 
-	    minimumBox.addItemListener(e -> {
-	        if (e.getStateChange() == ItemEvent.SELECTED) {
-	            minValue.setEnabled(true);
-	            minValue.requestFocus();
-	            filterData.setEnabled(true);
-	        } else {
-	            minValue.setEnabled(false);
-	            minValue.setText(null);
-	        }
+	    minimumBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+		        if (e.getStateChange() == ItemEvent.SELECTED) {
+		            minValue.setEnabled(true);
+		            minValue.requestFocus();
+		            filterData.setEnabled(true);
+		        } else {
+		            minValue.setEnabled(false);
+		            minValue.setText(null);
+		        }
+			}
 	    });
 
-	    maximumBox.addItemListener(e -> {
-	        if (e.getStateChange() == ItemEvent.SELECTED) {
-	            maxValue.setEnabled(true);
-	            maxValue.requestFocus();
-	            filterData.setEnabled(true);
-	        } else {
-	            maxValue.setEnabled(false);
-	            maxValue.setText(null);
-	        }
+	    maximumBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+		        if (e.getStateChange() == ItemEvent.SELECTED) {
+		            maxValue.setEnabled(true);
+		            maxValue.requestFocus();
+		            filterData.setEnabled(true);
+		        } else {
+		            maxValue.setEnabled(false);
+		            maxValue.setText(null);
+		        }	
+			}
 	    });
 
-	    filterData.addActionListener(e -> {
-	        applyMissingnessFilters(minValue, maxValue, minimumBox, maximumBox);
-	    });
+	    filterData.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+		        applyMissingnessFilters(minValue, maxValue, minimumBox, maximumBox);
+		        missingness.dispose();
+			}	
+		});
 	}
 
 	public void applyDepthFilters(JTextField minValueField, JTextField maxValueField, JCheckBox minimumBox, JCheckBox maximumBox) {
@@ -658,41 +777,117 @@ public class GUI extends JFrame{
 
 
 	private void updateFilteredStats() {
+		JPanel menuBarPanel = new JPanel( new BorderLayout() ); 
 		
 		JPanel updatedStats = new JPanel ( new GridLayout(1,2) );
 		
-		JPanel rightSide = new JPanel(new GridLayout(4,0));
+		JPanel rightSide = new JPanel(new GridLayout(4,1));
 
-		JTextField titleText = new JTextField("\nRefilter\n");
+		JTextArea titleText = new JTextArea("\nAdd more filters: \n");
 		titleText.setEditable(false);
+		titleText.setBackground(new Color(0,0,0,0));
+		titleText.setMargin(new Insets(10,10,10,10));
 		rightSide.add(titleText);
 		rightSide.add(depthButton);
 		rightSide.add(qualityButton);
 		rightSide.add(missingnessButton);
-		rightSide.setBackground(Color.white);
 		
 		JTextArea stats = new JTextArea("Your filtered file contains " + currentListOfVariants.getVars().size() + " variants" + newline);
 		stats.append( ( vcfFileStats.numVariants() - currentListOfVariants.getVars().size() + " variants have been removed." + newline + newline));
-		stats.append(resultTextLeft(currentListOfVariants));
+		stats.append(resultTextLeft());
 		stats.setLineWrap(true);
 		stats.setWrapStyleWord(true);
 		stats.setMargin(new Insets(10,10,10,10));
 		stats.setEditable(false);
 		updatedStats.add(stats);
 		updatedStats.add(rightSide);
+		menuBarPanel.add( mySaveMenuBar() , BorderLayout.NORTH);
+		menuBarPanel.add(updatedStats, BorderLayout.CENTER);
 		
-		main.add(updatedStats);
+		main.add(menuBarPanel);
 		
         depthButton.addActionListener(this::depthButtonActionPerformed);
         qualityButton.addActionListener(this::qualityButtonActionPerformed);
         missingnessButton.addActionListener(this::missingnessButtonActionPerformed);
 		
+        main.setContentPane(menuBarPanel);
 		main.revalidate();
 		main.repaint();
-
 		main.setVisible(true);
 	}
+	
+	private JMenuBar mySaveMenuBar() {
+		JMenuBar menuBar = new JMenuBar();
+		menuBar.setBackground(Color.GRAY);
+		menuBar.setOpaque(true);
+		JMenu fileMenu = new JMenu("Options");
+        menuBar.add(fileMenu);
 
+        JMenuItem saveMenuItem = new JMenuItem("Save Filtered File");
+        saveMenuItem.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				saveFile();	
+			}
+        });
+        fileMenu.add(saveMenuItem);
+
+        JMenuItem exitMenuItem = new JMenuItem("Exit");
+        exitMenuItem.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				exitProgram();				
+			}        	
+        });
+        fileMenu.add(exitMenuItem);
+        
+		return menuBar;
+	}
+	
+	private void saveFile() {
+		saveFileChooser.setDialogTitle("Save File");
+		
+		FileNameExtensionFilter filter = new FileNameExtensionFilter("Variant Call Format (VCF)", "vcf");
+        saveFileChooser.setFileFilter(filter);
+        
+        int result = saveFileChooser.showSaveDialog(main);
+		
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = saveFileChooser.getSelectedFile();
+            if ( selectedFile != null ) {
+	            String filePath = selectedFile.getAbsolutePath();
+	            if (!filePath.toLowerCase().endsWith(".vcf")) {
+	                selectedFile = new File(filePath + ".vcf");
+	            }
+	
+	            // write new file
+	            try (FileWriter writer = new FileWriter(selectedFile)) {
+	   
+	            	for ( String s : titles) {
+	            		writer.write(s + "\t"); //headers
+	            	}
+	            	writer.write("\n");
+	            	
+	            	for ( Variant v : currentListOfVariants.getVars() ) {
+	            		for ( Object o : v.getValues() ) {
+	            			writer.write(o + "\t"); //values
+	            		}
+	            		writer.write("\n");
+	            	}
+	
+	                JOptionPane.showMessageDialog(main, "File saved successfully!");
+	                
+	            } catch (IOException e) {
+	                e.printStackTrace();
+	                JOptionPane.showMessageDialog(main, "Error saving file");
+	            }
+            }
+        }
+	}
+
+	private void exitProgram() {
+		System.exit(0);
+	}
 	
 	public static void main(String[] args) {
 		new GUI();
